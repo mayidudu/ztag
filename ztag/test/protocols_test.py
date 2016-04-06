@@ -1,5 +1,6 @@
 from zsearch_definitions.protocols import Protocol, Subprotocol
 import zsearch_definitions.protocols
+import zschema.keys
 
 import unittest
 
@@ -26,6 +27,22 @@ class ProtocolNameTestCase(unittest.TestCase):
     def test_generic_subprotocols_exposed_as_attributes(self):
         proto_http = Protocol.from_pretty_name("http")
         self.assertTrue(hasattr(proto_http, "GET"))
+
+from ztag import schema
+
+
+class SchemaMatchesNamesTestCase(unittest.TestCase):
+
+    def test_schema(self):
+        host = schema.host
+        for key, obj in host.definition.iteritems():
+            if not type(key) == zschema.keys.Port:
+                continue
+            print key
+            for protocol_name, proto in obj.definition.iteritems():
+                print protocol_name
+
+
 
 if __name__ == '__main__':
     unittest.main()
