@@ -38,10 +38,16 @@ class SchemaMatchesNamesTestCase(unittest.TestCase):
         for key, obj in host.definition.iteritems():
             if not type(key) == zschema.keys.Port:
                 continue
-            print key
             for protocol_name, proto in obj.definition.iteritems():
-                print protocol_name
-
+                try:
+                    p = Protocol.from_pretty_name(protocol_name)
+                except KeyError:
+                    self.fail(protocol_name)
+                for subprotocol_name, data in proto.definition.iteritems():
+                    try:
+                        s = Subprotocol.from_pretty_name(subprotocol_name)
+                    except KeyError:
+                        self.fail(subprotocol_name)
 
 
 if __name__ == '__main__':
