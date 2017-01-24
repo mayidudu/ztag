@@ -1,4 +1,5 @@
 import time
+import multiprocessing
 import sys
 import os
 import csv
@@ -165,6 +166,26 @@ class RedisQueue(Outgoing):
     def cleanup(self):
         return self.push(noretry=True)
 
+class _KafkaWorkerProcess(multiprocessing.Process):
+
+    def __init__(self, q, topic, main_producer, cert_producer):
+        super(_KafkaWorkerProcess, self).__init__()
+        self.queue = q
+        self.topic = topic
+        self.main_producer = main_producer
+        self.cert_producer = cert_producer
+
+    def run(self):
+        while True:
+            pbout = self.queue.get()
+
+            # Use None as a sentinal
+            if pbout is None:
+                return
+            for certificate in pbout.certificates:
+                self.cert_producer.send("certificate", certificate)
+            self.main_producer.send(self.topic, pbout.transformed)
+
 
 class Kafka(Outgoing):
 
@@ -176,17 +197,31 @@ class Kafka(Outgoing):
         else:
             raise Exception("invalid destination: %s" % destination)
         host = os.environ.get('KAFKA_BOOTSTRAP_HOST', 'localhost:9092')
+        processes = os.environ.get('ZTAG_KAFKA_PROCESSES', 2)
         self.main_producer = KafkaProducer(bootstrap_servers=host)
         self.cert_producer = KafkaProducer(bootstrap_servers=host)
+        self.queue = multiprocessing.Queue()
+        self.processes = list()
+
+        for pnum in xrange(0, int(processes)):
+            p = _KafkaWorkerProcess(
+                    self.queue, self.topic, self.main_producer,
+                    self.cert_producer
+            )
+            p.start()
+            self.processes.append(p)
 
     def take(self, pbout):
-        for certificate in pbout.certificates:
-            self.cert_producer.send("certificate", certificate)
-        self.main_producer.send(self.topic, pbout.transformed)
+        self.queue.put(pbout)
 
     def cleanup(self):
+        # Trigger end of the queue
+        for p in self.processes:
+            self.queue.put(None)
+        # God forbid Python have sane abstractions
+        for p in self.processes:
+            p.join()
         if self.main_producer:
             self.main_producer.flush()
         if self.cert_producer:
             self.cert_producer.flush()
-
