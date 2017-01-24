@@ -179,7 +179,7 @@ class _KafkaWorkerProcess(multiprocessing.Process):
         while True:
             pbout = self.queue.get()
 
-            # Use None as a sentinal
+            # Use `None` as an end-of-queue sentinal
             if pbout is None:
                 return
             for certificate in pbout.certificates:
@@ -197,13 +197,13 @@ class Kafka(Outgoing):
         else:
             raise Exception("invalid destination: %s" % destination)
         host = os.environ.get('KAFKA_BOOTSTRAP_HOST', 'localhost:9092')
-        processes = os.environ.get('ZTAG_KAFKA_PROCESSES', 2)
+        process_count = int(os.environ.get('ZTAG_KAFKA_PROCESSES', 2))
         self.main_producer = KafkaProducer(bootstrap_servers=host)
         self.cert_producer = KafkaProducer(bootstrap_servers=host)
         self.queue = multiprocessing.Queue()
         self.processes = list()
 
-        for pnum in xrange(0, int(processes)):
+        for pnum in xrange(0, process_count):
             p = _KafkaWorkerProcess(
                     self.queue, self.topic, self.main_producer,
                     self.cert_producer
@@ -215,10 +215,15 @@ class Kafka(Outgoing):
         self.queue.put(pbout)
 
     def cleanup(self):
-        # Trigger end of the queue
+        # Trigger end of the queue. The queue object doesn't have a concept of
+        # closed, so we need to be able to distinguish "empty" from "done".
+        #
+        # Send one sentinal value (`None`) for each worker. This guarantees all
+        # workers will stop, since each worker will process exactly one sentinal
+        # value. The sentinals are guaranteed to be the last item on the queue,
+        # since this is the only producer.
         for p in self.processes:
             self.queue.put(None)
-        # God forbid Python have sane abstractions
         for p in self.processes:
             p.join()
         if self.main_producer:
