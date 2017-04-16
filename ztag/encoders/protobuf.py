@@ -63,7 +63,7 @@ class ProtobufObjectEncoder(Encoder):
         # We will not store this to disk inside of zdb.
         if len(zout.certificates) > 1:
             presented_chain = [base64.b64decode(c["raw"]) for c in
-                    zout.certificates[1:]
+                    zout.certificates[1:]]
         else:
             presented_chain = []
 
