@@ -58,9 +58,7 @@ class ProtobufObjectEncoder(Encoder):
         # If chains were guaranteed to be presented in a rasonable order, we
         # could just pass up [n+1:], but people get this wrong all the time,
         # so we might as well just pass up the entire chain along with every
-        # certificate, but people get this wrong all the time, so we might
-        # as well just pass up the entire chain along with every certificate.
-        # We will not store this to disk inside of zdb.
+        # certificate. We will not store this to disk inside of zdb.
         if len(zout.certificates) > 1:
             presented_chain = [base64.b64decode(c["raw"]) for c in
                     zout.certificates[1:]]
@@ -78,8 +76,9 @@ class ProtobufObjectEncoder(Encoder):
             if valid_nss is not None:
                 c.valid_nss = valid_nss
                 c.validation_timestamp = record.timestamp
-            c.parents = [p.decode("hex") for p in cert_dict.get("parents", [])]
-            c.presented_chain = presented_chain
+            c.parents.extend([p.decode("hex") for p in cert_dict.get("parents",
+                [])])
+            c.presented_chain.extend(presented_chain)
             ar.sha256fp = c.sha256fp
             ar.scan_id = self.scan_id
             out.certificates.append(ar)
